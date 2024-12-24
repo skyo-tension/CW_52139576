@@ -139,7 +139,7 @@
 <div class="outer">
     <div class="bottom_fixed" data-sender_id="<?php echo $talkroom_data['sender_id']; ?>"
         data-receiver_id="<?php echo $talkroom_data['receiver_id']; ?>"
-        data-talkroom_id="<?php echo $talkroom_data['id']; ?>" data-pay_per="<?php echo $pay_per; ?>">
+        data-talkroom_id="<?php echo $talkroom_data['id']; ?>" data-pay_per="<?php echo $pay_per; ?>" data-stripe_id="<?php echo $stripe_id; ?>">
         <?php if ($talkroom_data['sender_id'] == $usinfo['id']): ?><!--ログインユーザーが依頼者の場合、予約ボタンあり-->
             <div class="reserve_button" id="open_modal">
                 <span class="reserve_text pc_only">予約</span>
@@ -590,6 +590,7 @@
                 var talkroomid = $('.bottom_fixed').data('talkroom_id');
                 var senderid = $('.bottom_fixed').data('sender_id');
                 var receiverid = $('.bottom_fixed').data('receiver_id');
+                var stripeid = $('.bottom_fixed').data('stripe_id');
 
                 $.ajax({
                     url: 'https://himatch.jp/ajax/talkroom',
@@ -605,7 +606,8 @@
                         payment_method_now: payment_method_now,
                         usage_time: usage_time,
                         expenses: expenses,
-                        p_id: p_id
+                        p_id: p_id,
+                        customerid: stripeid
                     },
                 })
                     .done(function (data, textStatus, jqXHR) {
@@ -685,6 +687,45 @@
                 var selected_payment_method = selected_payment_method.value;
                 if (selected_payment_method == 'credit') {
                     // document.getElementById('payment_method_area').innerHTML = '<div class="credit_text">クレジットカード決済</div><div class="reserve_form_area2"><input type="text" class="reserve_form3" name="name" placeholder="カード番号(16桁)"></div><div class="reserve_form_area3"><input type="text" class="reserve_form3" name="name" placeholder="有効期限(MM/YY)"></div><div class="reserve_form_area4"><input type="text" class="reserve_form4" name="name" placeholder="セキュリティコード(3桁)"></div>';   
+
+                    var reuse_card_number      = ''; // 再利用カード番号
+                    var reuse_card_number_html = ''; // 再利用カード番号HTML
+                    var reuse_checkbox_html    = ''; // チェックボックスHTML
+                    // stripe用の顧客IDがある場合、顧客詳細情報取得し、HTML生成
+                    var stripeid = $('.bottom_fixed').data('stripe_id');
+                    if (stripeid) {
+
+                        $.ajax({
+                            url: 'https://himatch.jp/ajax/get_customer',
+                            type: "post",
+                            data: {
+                                customerid: stripeid
+                            },
+                        })
+                        .done(function(data, textStatus, jqXHR) {
+                            var data_json = JSON.parse(data);
+                            if (data_json.success && data_json.defaultPaymentMethod) {
+                                reuse_card_number = `**** **** **** ${data_json.defaultPaymentMethod.card.last4}`;
+                            }
+                        })
+                        .fail(function() {
+                            alert("顧客の詳細情報取得できませんでした。\nお手数ですが、管理者へお問い合わせください。");
+                        });
+
+                        reuse_card_number_html = `
+                        <div id="reuse-card-number">
+                        ${reuse_card_number}
+                        </div>
+                        `;
+                        reuse_checkbox_html = `
+                        <!-- 前回のカード情報利用チェック -->
+                        <div class="checkbox-container">
+                            <input type="checkbox" id="reuse-checkbox" />
+                            <label for="reuse-checkbox">前回のカード情報を利用する</label>
+                        </div>
+                        `;
+                    }
+
                     credit_text_html = `
                     <style>
                         .reserve_item_payment_method {
@@ -694,7 +735,7 @@
                             vertical-align: top;
                             padding-top: 5px;
                         }
-                        #card-number, #card-expiry, #card-cvc {
+                        #card-number, #card-expiry, #card-cvc, #reuse-card-number {
                             position: relative;
                             left: 10px;
                             padding-left: 1px;
@@ -703,7 +744,10 @@
                             width: 200px;
                             height: 25px;
                         }
-                        #card-number::before, #card-expiry::before, #card-cvc:before {
+                        #reuse-card-number {
+                            display: none;
+                        }
+                        #card-number::before, #card-expiry::before, #card-cvc:before, #reuse-card-number:before {
                             content: '';
                             display: inline-block;
                             width: 10px;
@@ -715,11 +759,17 @@
                             top: 50%;
                             transform: translateY(-50%);
                         }
+                        .checkbox-container {
+                            margin-top: 10px;
+                            margin-left: 10px;
+                        }
                     </style>
-                    <div class="credit_text">クレジットカード決済<label class="use_previous_card"><input type="checkbox" id="use_previous_card">前回のカード情報を利用する</label></div>
+                    <div class="credit_text">クレジットカード決済
+                    ${reuse_checkbox_html}
                     <form id="payment-form">
                         <!-- カード番号 -->
                         <div id="card-number"></div>
+                        ${reuse_card_number_html}
                         <!-- 有効期限 -->
                         <div id="card-expiry"></div>
                         <!-- セキュリティコード -->
@@ -732,6 +782,22 @@
                     cardNumber.mount('#card-number');
                     cardExpiry.mount('#card-expiry');
                     cardCvc.mount('#card-cvc');
+
+                    // チェックボックスの状態を監視し、ボタンの有効/無効を切り替える
+                    const reuseCheckbox = document.getElementById('reuse-checkbox');
+                    reuseCheckbox.addEventListener('change', function() {
+                        if (reuseCheckbox.checked) {
+                            document.getElementById('card-number').style.display       = 'none';
+                            document.getElementById('card-expiry').style.display       = 'none';
+                            document.getElementById('card-cvc').style.display          = 'none';
+                            document.getElementById('reuse-card-number').style.display = 'block';
+                        } else {
+                            document.getElementById('card-number').style.display       = 'block';
+                            document.getElementById('card-expiry').style.display       = 'block';
+                            document.getElementById('card-cvc').style.display          = 'block';
+                            document.getElementById('reuse-card-number').style.display = 'none';
+                        }
+                    });
 
                     const form = document.getElementById('payment-form');
 

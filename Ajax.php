@@ -200,6 +200,7 @@ class Ajax extends CI_Controller {
 		}
 		//Stripe
 		$paymentMethodId = $this->input->post('p_id');
+		$customerId = $this->input->post('customerId');
 		$receiver_price = $this->input->post('receiver_price');
 		$senderid = $this->input->post('senderid');		
 
@@ -220,34 +221,88 @@ class Ajax extends CI_Controller {
 
         //クレジットカード決済のみStripe処理
 		if($payment_method_now != '銀行振込'){
-            $customerData = [
-                'email' => 'customer@example.com', 
-                'name' => 'John Doe', 
-                'description' => 'A new customer', 		
-            ];
             
             require 'vendor/autoload.php';
             \Stripe\Stripe::setApiKey('sk_test_51OxMuA2NouBXQI50wYtQTA1ljoIWw3UxfDUqWVjuDIaOxkIOFt8gULELLNI1QrfB0H5G00i4fzv68FWNWADjK2vK00Yxv57CNx');
-            $customer = \Stripe\Customer::create($customerData);
+            
+			// 初回決済、顧客作成
+			if ($paymentMethodId && !$customerId) {
+				
+				try {
+
+					// 新しい顧客作成
+					$customer = \Stripe\Customer::create([
+						'email' => 'customer@example.com', 
+						'name' => 'John Doe', 
+						'description' => 'A new customer',
+						'payment_method' => $paymentMethodId,
+						'invoice_settings' => [
+							'default_payment_method' => $paymentMethodId,
+						],
+					]);
+					// Stripeが提供する決済フローを管理するためのオブジェクト作成
+					$paymentIntent = \Stripe\PaymentIntent::create([
+						'payment_method_types' => ['card'],
+						'customer' =>  $customer->id,
+						'amount' => $total_amount,
+						'currency' => 'jpy',
+						'payment_method' => $paymentMethodId,
+						'confirmation_method' => 'manual',
+						'confirm' => true,
+					]);
+
+					// echo json_encode(['success' => true, 'customerId' => $customer->id, 'paymentIntent' => $paymentIntent->id]);
+					//echo "Ok";
+				} catch (\Stripe\Exception\CardException $e) {
     
-            try {
-                        
-                $paymentIntent = \Stripe\PaymentIntent::create([
-                    'payment_method_types' => ['card'],
-                    'customer' =>  $customer->id,
-                    'amount' => $total_amount,
-                    'currency' => 'jpy',
-                    'payment_method' => $paymentMethodId,
-                    'confirmation_method' => 'manual',
-                    'confirm' => true,
-                ]);
+					// Stripeが返すエラーコードを取得
+					$errorCode = $e->getError()->code;
+
+					if ($errorCode === 'expired_card') {
+						echo "カードの有効期限が切れています。";
+					} else {
+						echo "決済エラー: " . $e->getError()->message;
+					}
+				}
+			
+			// 再利用決済、保存されたカード情報を利用した支払い
+			} elseif ($customerId) {
+
+				try {
+
+				    // 顧客情報の取得
+					$customer = \Stripe\Customer::retrieve($customerId);
+					// デフォルトの支払い方法を取得
+					$defaultPaymentMethod = $customer->invoice_settings->default_payment_method;
+					if (!$defaultPaymentMethod) {
+						echo "Break";
+					}
+					// Stripeが提供する決済フローを管理するためのオブジェクト作成
+					$paymentIntent = \Stripe\PaymentIntent::create([
+						'payment_method_types' => ['card'],
+						'customer' =>  $customerId,
+						'amount' => $total_amount,
+						'currency' => 'jpy',
+						'payment_method' => $defaultPaymentMethod,
+						'confirmation_method' => 'manual',
+						'confirm' => true,
+					]);
+					// echo json_encode(['success' => true, 'paymentIntent' => $paymentIntent->id]);
+					//echo "Ok";
+				} catch (\Stripe\Exception\CardException $e) {
     
-                //echo "Ok";
-    
-            } catch (\Stripe\Exception\CardException $e) {
-    
-                echo "Break";
-            }
+					// Stripeが返すエラーコードを取得
+					$errorCode = $e->getError()->code;
+
+					if ($errorCode === 'expired_card') {
+						echo "カードの有効期限が切れています。";
+					} else {
+						echo "決済エラー: " . $e->getError()->message;
+					}
+				}
+			} else {
+				echo "Break";
+			}
 		}
 
         //メッセージ送信
@@ -721,6 +776,70 @@ class Ajax extends CI_Controller {
 		$this->Comu->reviewer_data_update($json_reviewer_data,$uid);
 	}
 
+	/**
+	 * stripe用の顧客詳細情報取得
+	 *
+	 */
+	public function get_customer()
+	{
+		$this->load->helper('url');
+		if ($this->input->is_ajax_request()) {
+		} else {
+			redirect("/");
+		}
+
+		$this->load->library('session');
+		if($this->session->userdata('lgid') AND $this->session->userdata('lgmail') AND $this->session->userdata('lgpass')){
+			$lgid = $this->session->userdata('lgid');
+			$this->load->model('Member');
+			$usinfo = $this->Member->usinfo_get($lgid);
+		}else{
+			redirect("user/login");
+		}
+
+		$customerid = $this->input->post('customerid');
+		if (!$customerid) {
+			http_response_code(400);
+			echo json_encode(['success' => false, 'error' => 'Customer ID is required']);
+			exit;
+		}
+
+		require 'vendor/autoload.php';
+		\Stripe\Stripe::setApiKey('sk_test_51OxMuA2NouBXQI50wYtQTA1ljoIWw3UxfDUqWVjuDIaOxkIOFt8gULELLNI1QrfB0H5G00i4fzv68FWNWADjK2vK00Yxv57CNx');
+
+		try {
+
+			// 顧客情報を取得
+			$customer = \Stripe\Customer::retrieve($customerid);
+			// デフォルトの支払い方法を取得
+			$defaultPaymentMethodId = $customer->invoice_settings->default_payment_method;
+			if (!$defaultPaymentMethodId) {
+				echo json_encode(['success' => true, 'defaultPaymentMethod' => null]);
+				exit;
+			}
+			// 支払い方法の詳細を取得
+			$paymentMethod = \Stripe\PaymentMethod::retrieve($defaultPaymentMethodId);
+			// カード情報を含むレスポンスを返す
+			echo json_encode([
+				'success' => true,
+				'defaultPaymentMethod' => [
+					'id' => $paymentMethod->id,
+					'card' => [
+						'brand' => $paymentMethod->card->brand, // カードブランド
+						'last4' => $paymentMethod->card->last4, // カード番号の末尾4桁
+						'exp_month' => $paymentMethod->card->exp_month, // 有効期限（月）
+						'exp_year' => $paymentMethod->card->exp_year, // 有効期限（年）
+					],
+				],
+			]);
+		} catch (\Stripe\Exception\ApiErrorException $e) {
+			http_response_code(500);
+			echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+		} catch (Exception $e) {
+			http_response_code(400);
+			echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+		}
+	}
 
 	public function transfer()
 	{
