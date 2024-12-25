@@ -200,7 +200,7 @@ class Ajax extends CI_Controller {
 		}
 		//Stripe
 		$paymentMethodId = $this->input->post('p_id');
-		$customerId = $this->input->post('customerId');
+		$customerId = $this->input->post('customerid');
 		$receiver_price = $this->input->post('receiver_price');
 		$senderid = $this->input->post('senderid');		
 
@@ -250,6 +250,8 @@ class Ajax extends CI_Controller {
 						'confirmation_method' => 'manual',
 						'confirm' => true,
 					]);
+
+					$customerId = $customer->id;
 
 					// echo json_encode(['success' => true, 'customerId' => $customer->id, 'paymentIntent' => $paymentIntent->id]);
 					//echo "Ok";
@@ -326,6 +328,10 @@ class Ajax extends CI_Controller {
 		$usage_time = $this->input->post('usage_time');
 		$expenses = $this->input->post('expenses');        
 */
+		if($reserve_check == 'yes'){
+			$this->Comu->customer_id_update($senderid,$customerid);
+		}
+
 		$this->load->model('Comu');
 		$talkroomdata = $this->Comu->talkroom_get($talkroom_id);
 
