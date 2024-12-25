@@ -1134,7 +1134,7 @@ $(document).on("click", ".slide_menu_bg", function(){
     <div class="bottom_fixed" data-sender_id="14"
         data-receiver_id="18"
         data-talkroom_id="25" data-pay_per="分"
-        data-stripe_id="12345abcdefg">
+        >
         <!--ログインユーザーが依頼者の場合、予約ボタンあり-->
             <div class="reserve_button" id="open_modal">
                 <span class="reserve_text pc_only">予約</span>
@@ -1751,19 +1751,21 @@ $(document).on("click", ".slide_menu_bg", function(){
 
                     // チェックボックスの状態を監視し、ボタンの有効/無効を切り替える
                     const reuseCheckbox = document.getElementById('reuse-checkbox');
-                    reuseCheckbox.addEventListener('change', function() {
-                        if (reuseCheckbox.checked) {
-                            document.getElementById('card-number').style.display       = 'none';
-                            document.getElementById('card-expiry').style.display       = 'none';
-                            document.getElementById('card-cvc').style.display          = 'none';
-                            document.getElementById('reuse-card-number').style.display = 'block';
-                        } else {
-                            document.getElementById('card-number').style.display       = 'block';
-                            document.getElementById('card-expiry').style.display       = 'block';
-                            document.getElementById('card-cvc').style.display          = 'block';
-                            document.getElementById('reuse-card-number').style.display = 'none';
-                        }
-                    });
+                    if (reuseCheckbox) {
+                        reuseCheckbox.addEventListener('change', function() {
+                            if (reuseCheckbox.checked) {
+                                document.getElementById('card-number').style.display       = 'none';
+                                document.getElementById('card-expiry').style.display       = 'none';
+                                document.getElementById('card-cvc').style.display          = 'none';
+                                document.getElementById('reuse-card-number').style.display = 'block';
+                            } else {
+                                document.getElementById('card-number').style.display       = 'block';
+                                document.getElementById('card-expiry').style.display       = 'block';
+                                document.getElementById('card-cvc').style.display          = 'block';
+                                document.getElementById('reuse-card-number').style.display = 'none';
+                            }
+                        });
+                    }
 
                     const form = document.getElementById('payment-form');
 

@@ -785,19 +785,21 @@
 
                     // チェックボックスの状態を監視し、ボタンの有効/無効を切り替える
                     const reuseCheckbox = document.getElementById('reuse-checkbox');
-                    reuseCheckbox.addEventListener('change', function() {
-                        if (reuseCheckbox.checked) {
-                            document.getElementById('card-number').style.display       = 'none';
-                            document.getElementById('card-expiry').style.display       = 'none';
-                            document.getElementById('card-cvc').style.display          = 'none';
-                            document.getElementById('reuse-card-number').style.display = 'block';
-                        } else {
-                            document.getElementById('card-number').style.display       = 'block';
-                            document.getElementById('card-expiry').style.display       = 'block';
-                            document.getElementById('card-cvc').style.display          = 'block';
-                            document.getElementById('reuse-card-number').style.display = 'none';
-                        }
-                    });
+                    if (reuseCheckbox) {
+                        reuseCheckbox.addEventListener('change', function() {
+                            if (reuseCheckbox.checked) {
+                                document.getElementById('card-number').style.display       = 'none';
+                                document.getElementById('card-expiry').style.display       = 'none';
+                                document.getElementById('card-cvc').style.display          = 'none';
+                                document.getElementById('reuse-card-number').style.display = 'block';
+                            } else {
+                                document.getElementById('card-number').style.display       = 'block';
+                                document.getElementById('card-expiry').style.display       = 'block';
+                                document.getElementById('card-cvc').style.display          = 'block';
+                                document.getElementById('reuse-card-number').style.display = 'none';
+                            }
+                        });
+                    }
 
                     const form = document.getElementById('payment-form');
 
